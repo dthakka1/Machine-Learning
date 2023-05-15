@@ -1,0 +1,122 @@
+---
+title: "Naive Bayes"
+author: "Dutt Thakkar"
+date: "2023-03-05"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Installing required packages
+```{r}
+library(caret)
+library(ISLR)
+library(e1071)
+library(dplyr)
+library(ggplot2)
+library(tinytex)
+library(reshape2)
+```
+
+#Importing data
+```{r}
+library(readr)
+UniversalBank=read.csv("/Users/duttthakkar/Desktop/Business Analytics/Machine Learning/Assignment 2/UniversalBank.csv")
+df=UniversalBank
+summary(df)
+```
+
+#Converting Personal.Loan, CreditCard, and Online into factor using as.factor function
+```{r}
+df$Personal.Loan<-as.factor(df$Personal.Loan)
+df$Online<-as.factor(df$Online)
+df$CreditCard<-as.factor(df$CreditCard)
+```
+
+#Partitioning data into 60% training and 40% validation set
+```{r}
+set.seed(123)
+train.index=createDataPartition(df$Personal.Loan, p=0.6, list = FALSE)
+validation.index=setdiff(row.names(df),train.index)
+train.df=df[train.index,]
+validation.df=df[validation.index,]
+nrow(train.df)
+```
+
+#Question1: Creating pivot table for the training data with Online as a column variable, CreditCard as row variable, and loan as secondary row variable.
+```{r}
+partition.bank=melt(train.df, id.vars = c("CreditCard","Personal.Loan"), measure.vars = "Online")
+pivot.table=dcast(partition.bank, CreditCard + Personal.Loan ~ variable, fun.aggregate = length)
+pivot.table
+Bank=ftable(df$CreditCard, df$Personal.Loan, df$Online)
+Bank
+```
+
+#Question2: Considering the task of classifying a customer who owns a bank credit card and is actively using online banking services. Looking at the pivot table, what is the probability that this customer will accept the loan offer? [This is the probability of loan acceptance (Loan = 1) conditional on having a bank credit card (CC = 1) and being an active user of online banking service (Online = 1)]
+```{r}
+p.acceptance=(82/800)
+p.acceptance
+```
+#The probability of loan acceptance conditional on having a bank credit card and being an active user of online banking service is 10.25%
+
+#Question 3: Creating two separate pivot tables for the training data. One will have Loan (rows) as a function of Online (columns) and the other will have Loan (rows) as a function of CC. 
+```{r}
+Loan_online <- addmargins(table(train.df[,c(13,10)]))
+Loan_online
+Loan_CC <- addmargins(table(train.df[,c(14,10)]))
+Loan_CC
+```
+#Question 4: Computing the following quantities [P(A | B) means “the probability ofA given B”]
+```{r}
+#P(CC = 1 | Loan = 1) (the proportion of credit card holders among the loan acceptors)
+I=(91/278)
+paste("P (CC = 1 | Loan = 1) =", round(I*100,2),"%")
+
+#P(Online = 1 | Loan = 1)  
+II=(179/278)
+paste("P(Online=1|Loan=1) = ", round(II*100,2),"%")
+
+#P(Loan = 1) (the proportion of loan acceptors)
+III=(278/3000)
+paste("P (Loan = 1) = ", round(III*100,2),"%")
+
+#P(CC = 1 | Loan = 0) 
+IV=(792/2722)
+paste("P(CC=1|Loan=0) = ", round(IV*100,2),"%")
+
+#P(Online = 1 | Loan = 0) 
+V=(1620/2722)
+paste("P(Online=1|Loan=0) = ", round(V*100,2),"%")
+
+#P(Loan=0)
+VI=(2722/3000)
+paste("P(Loan=0) = ", round(VI*100,2),"%")
+```
+#Question 5: Using the quantities computed above to compute the naive Bayes probability P(Loan = 1 | CC = 1, Online = 1)
+```{r}
+Naive_Bay_Prob <- ((I*II*III)/((I*II*III)+(IV*V*VI)))
+Naive_Bay_Prob
+```
+#Naive Bayes probability is 11.06%
+
+#Question 6: Compare this value with the one obtained from the pivot table in (B). Which is a more accurate estimate? 
+# 10.25% and 11.06 are very close and is comparable. The Naive Bayes method's predictions might be more adaptable, but they might also be less accurate because of the simplifying assumption of independence across features
+
+#Question 7: Which of the entries in this table are needed for computing P(Loan = 1 | CC = 1, Online = 1)? Run naive Bayes on the data. Examine the model output on training data, and find the entry that corresponds to P(Loan = 1 | CC = 1, Online = 1). Compare this to the number you obtained in (E). 
+
+```{r}
+NB.train= train.df[,c(10,13:14)]
+NB.validation=validation.df[,c(10,13:14)]
+N_bayes = naiveBayes(Personal.Loan~.,data=NB.train)
+N_bayes
+```
+#Probability calculation from Naive Bayes model
+```{r}
+Naive_Bayes = (0.4700881*0.4797134*0.092)/((0.4700881*0.4797134*0.092)+(0.4542897*0.4909531*0.907))
+Naive_Bayes
+```
+#We got very close output as compared to what we received in Previous methods because the joint and marginal probabilities we calculated in question 5  are only slight different as given by the Naive Bayes function.
