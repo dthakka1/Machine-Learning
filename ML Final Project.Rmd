@@ -1,0 +1,237 @@
+---
+title: "Machine Learning Final Project"
+author: "Dutt Thakkar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#loading reqiured pacakges
+```{r}
+library(caret)
+library(corrplot)
+library(ggcorrplot)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(e1071)
+library(reshape2)
+library(factoextra)
+library(cluster)
+library(cowplot)
+library(pander)
+library(kernlab)
+```
+
+#importing dataset and viewing summary
+```{r}
+Data_set <- read.csv("/Users/duttthakkar/Desktop/fuel_receipts_costs_eia923(1).csv")
+summary(Data_set)
+```
+
+#Gathering the percentages of all the null values from each column
+```{r}
+fuel_data<-Data_set%>% replace(.=="", NA)
+Null_values<-fuel_data%>%is.na()%>%colMeans()*100
+Null_values
+```
+
+#Removing all variables with null values having percentage more than 50 % and few other variables which doesn't add much value to the analysis
+```{r}
+fuel_data_1<- subset(fuel_data,select=c(rowid,plant_id_eia,fuel_received_units,fuel_mmbtu_per_unit,sulfur_content_pct,ash_content_pct,mercury_content_ppm,fuel_cost_per_mmbtu,contract_type_code,energy_source_code,fuel_type_code_pudl,fuel_group_code,supplier_name,primary_transportation_mode_code,plant_id_eia_label, natural_gas_transport_code,contract_type_code))
+head(fuel_data_1)
+```
+
+#Here we are sampling the 2% of fuel data:
+```{r}
+set.seed(2299)
+
+fuel_data_2<-sample_n(fuel_data_1,12000)
+#Splitting the data into 75:25 test and train ratio
+
+set.seed(2299)
+
+sample<-createDataPartition(fuel_data_2$rowid,p=0.75, list=FALSE)
+
+train<-fuel_data_2[sample,]
+
+test<-fuel_data_2[-sample,]
+```
+
+#Combining the required Categorical and Numerical variables
+```{r}
+data_<-train[,c(2,3,4,5,6,7,8,11)]
+```
+
+#Replacing the "NA" values with 0 for the calculations:
+```{r}
+data_a<-data_%>% replace(.=="", NA)
+head(data_a)
+
+data_a[is.na(data_a)] <- 0
+```
+
+#Assigning the dummy variables to the categorical variables fuel_type_code_pudl
+```{r}
+coal <- ifelse(data_a$fuel_type_code_pudl=="coal" ,1,0)
+gas <- ifelse(data_a$fuel_type_code_pudl=="gas" ,1,0)
+oil <- ifelse(data_a$fuel_type_code_pudl=="oil" ,1,0)
+
+
+fuel_data3<-cbind(data_a[,-c(8)], coal, gas, oil)
+head(fuel_data3)
+```
+
+#Normalizing the Data
+```{r}
+fuel_data4<-scale(fuel_data3)
+```
+
+# Applying hierarchical clustering algorithm
+# Creating the dissimilarity matrix for data set the through Euclidean distance
+```{r}
+distance <- dist(fuel_data4, method = "euclidean")
+
+# Hierarchical clustering using the Ward's method
+cluster_fuel <- hclust(distance, method = "ward.D2" )
+cluster_fuel
+```
+
+#Because of Ward’s minimal variance, Ward’s distance is employed. the standard reduces the overall within-cluster variance
+
+```{r}
+# Plotting the cluster Dendrogram
+
+plot(cluster_fuel, cex = 0.6, hang = -1)
+rect.hclust(cluster_fuel,k=3,border=2:5)
+
+```
+#Cut-off height = 140.Therefore number of clusters = 3. We select k value = 3 using the domain knowledge to determine the distribution of 3 fuel kinds in each cluster.
+
+#cutting the dendrogram tree for k=3
+```{r}
+group <- cutree(cluster_fuel, k = 3)
+```
+
+#Finding the number of members in each of the clusters.
+```{r}
+table(group)
+```
+
+#Binding the clusters to main data 
+```{r}
+fuel_data5<- cbind(fuel_data3, clustering = group)
+```
+
+#Cluster visualization 
+```{r}
+fviz_cluster(list(data = fuel_data5, cluster = group))
+```
+#The three clusters are named as Coal, Gas and Oil
+#Cluster 1= GAS
+#Cluster 2= COAL
+#Cluster 3= OIL
+
+#Finding the mean of the required columns for interpretation
+```{r}
+combined_data<-cbind(fuel_data5,train[,c(9,11,12,14,15,16)])
+
+fuel<-combined_data %>% mutate(clusters=combined_data$clustering) %>% group_by(clusters)
+
+fuel_data5<-fuel[,c(2:11)]%>%group_by(clustering)%>%summarise_all("mean")
+```
+
+#Plotting clusters vs other variables
+#Cluster vs fuel type 
+```{r}
+ggplot(fuel, aes(x = clusters, fill = fuel_type_code_pudl)) +
+  geom_bar() +
+  scale_fill_manual(values = c("green", "orange", "purple"))
+
+
+```
+#cluster vs heat content
+#Clustering for heat content in the fuel 
+```{r}
+ggplot(fuel_data5, aes(x=clustering, y=fuel_mmbtu_per_unit,fill=clustering)) + geom_bar(stat="identity") + 
+labs(x="clusters", y="fuel heat content")+scale_fill_gradient(low = "red", high = "blue") + theme_minimal()
+```
+#Cluster vs fuel received
+#Clustering for Fuel received 
+```{r}
+ggplot(fuel_data5, aes(x=clustering, y=fuel_received_units,fill=clustering)) + geom_bar(stat="identity") + 
+labs(x="clusters", y="fuel recieved")+scale_fill_viridis_c(option = "viridis", direction = 1) +
+theme_minimal()
+```
+#Cluster vs fuel cost
+#Clustering for fuel cost
+```{r}
+ggplot(fuel_data5, aes(x=clustering, y = fuel_cost_per_mmbtu,fill=clustering)) + geom_bar(stat="identity") + 
+labs(x="clusters", y="fuel_cost")
+```
+#Cluster vs sulfur content
+#Clustering for Sulfur Content.
+```{r}
+ggplot(fuel_data5, aes(x=clustering, y=sulfur_content_pct,fill=clustering)) + geom_bar(stat="identity") + 
+labs(x="clusters", y="sulfur content")+scale_fill_gradient(low = "pink", high = "grey") + theme_minimal()
+```
+#Cluster vs ash content
+#Clustering for Ash Content
+```{r}
+ggplot(fuel_data5, aes(x=clustering, y=ash_content_pct,fill=clustering)) + geom_bar(stat="identity") + 
+labs(x="clusters", y="ash content")
+```
+#Combining plots
+```{r}
+library(gridExtra)
+
+# Define each plot separately
+p1 <- ggplot(fuel, aes(x = clusters, fill = fuel_type_code_pudl)) +
+  geom_bar() +
+  scale_fill_manual(values = c("green", "orange", "purple"))
+
+p2 <- ggplot(fuel_data5, aes(x=clustering, y=fuel_mmbtu_per_unit,fill=clustering)) + geom_bar(stat="identity") + 
+  labs(x="clusters", y="fuel heat content")+scale_fill_gradient(low = "red", high = "blue") + theme_minimal()
+
+p3 <- ggplot(fuel_data5, aes(x=clustering, y=fuel_received_units,fill=clustering)) + geom_bar(stat="identity") + 
+  labs(x="clusters", y="fuel recieved")+scale_fill_viridis_c(option = "viridis", direction = 1) +
+  theme_minimal()
+
+p4 <- ggplot(fuel_data5, aes(x=clustering, y=fuel_cost_per_mmbtu,fill=clustering)) + geom_bar(stat="identity") + 
+  labs(x="clusters", y="fuel_cost")
+
+p5 <- ggplot(fuel_data5, aes(x=clustering, y=sulfur_content_pct,fill=clustering)) + geom_bar(stat="identity") + 
+  labs(x="clusters", y="sulfur content")+scale_fill_gradient(low = "pink", high = "grey") + theme_minimal()
+
+p6 <- ggplot(fuel_data5, aes(x=clustering, y=ash_content_pct,fill=clustering)) + geom_bar(stat="identity") + 
+  labs(x="clusters", y="ash content")
+
+# Combine the plots using grid.arrange()
+grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3)
+```
+
+
+# Conclusion of clusters
+
+#Cluster 1 - Gas - Our sample contains Cluster 1 data, which make up about 55% of the data. Gas is the main fuel type in this cluster. With 411384 units, gas has the highest average number of units received compared to coal and oil. Materials like ash, and sulphur are absent from gas. Each MMBtu of gasoline costs 4.50 USD.
+
+#Cluster 2 - Coal - 3215 observations make up Cluster 2, representing 35.72% of the data in our sample. The fuel type used in this cluster is coal. 47862 units are often obtained in terms of coal units. The fuel has an average heat content of 21.32, which is higher than the heat contents of the other two fuels. The typical sulfur and ash concentrations in coal fuel are 1.38 percent and 10 percent, respectively. With an average fuel price of 1.70 USD per MMBtu, coal energy is less expensive than gas and oil.
+
+#Cluster 3 - Oil - Cluster 3 only accounts for 8.9% of the data in our sample. Oil is the fuel that is used. We received 6628 units of gasoline in total. Fuel has a heat content that is 5.83 units higher than gas. The sulphur content of this type of gasoline is extremely low at 0.19%. The price of fuel is $17 per MMBtu.
+
+
+
+
+
+
+
+
+
+
+
+
+
+

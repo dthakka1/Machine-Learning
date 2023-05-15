@@ -1,0 +1,156 @@
+---
+title: "ML Final Project Extra Credit"
+author: "Dutt Thakkar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# For Regression model, using different data subset for evaluating the regression results. Selecting those variables that acutally affects the analysis
+
+#loading reqiured pacakges
+```{r}
+library(caret)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(factoextra)
+library(cluster)
+```
+
+#importing dataset and viewing summary
+```{r}
+Data_set <- read.csv("/Users/duttthakkar/Desktop/fuel_receipts_costs_eia923(1).csv")
+summary(Data_set)
+```
+#data cleaning
+
+#selecting attributes
+```{r}
+fuel_data<-Data_set[,c(11,16,17,18,20)]
+summary(fuel_data)
+str(fuel_data)
+```
+#checking for Na's
+```{r}
+colMeans(is.na(fuel_data))
+```
+
+#Data imputing
+```{r}
+fuel_data$fuel_cost_per_mmbtu[is.na(fuel_data$fuel_cost_per_mmbtu)] <- mean(fuel_data$fuel_cost_per_mmbtu, na.rm = TRUE)
+colMeans(is.na(fuel_data))
+```
+#all Na's have been imputed using the mean 
+
+#Data partition
+```{r}
+library(caTools)
+set.seed(2299)
+# Sample about 2% of data
+sample_size <- round(0.02 * nrow(fuel_data))
+sample_indices <- sample(nrow(fuel_data), sample_size, replace = FALSE)
+
+# Split sampled data into training and test sets
+train_data <- fuel_data[sample_indices[1:round(0.75*sample_size)], ]
+test_data <- fuel_data[sample_indices[(round(0.75*sample_size) + 1):sample_size], ]
+
+nrow(train_data)
+nrow(test_data)
+```
+
+#normalization of the data
+```{r}
+cluster_data <- train_data %>% select( 'ash_content_pct', 'sulfur_content_pct','fuel_mmbtu_per_unit','fuel_cost_per_mmbtu')
+
+cluster_train <- preProcess(cluster_data, method = "range")
+cluster_predict <- predict(cluster_train, cluster_data)
+
+summary(cluster_predict)
+```
+
+
+
+#Applying K-means Algorithm
+```{r}
+KMean_ <- kmeans(cluster_predict, centers = 2, nstart = 30) 
+```
+
+#centers
+```{r}
+KMean_$centers
+```
+
+
+#The final cluster
+```{r}
+fcluster<- KMean_$cluster
+f_cluster<- cbind(train_data, fcluster)
+f_cluster$fcluster<-as.factor(f_cluster$fcluster)
+head(f_cluster)
+```
+#We find the mean of all the quantitative variables
+```{r}
+f_cluster%>%group_by(fcluster)%>%
+  summarize(
+    fuel_mmbtu_per_unit=mean(fuel_mmbtu_per_unit),
+            fuel_cost_per_mmbtu=mean(fuel_cost_per_mmbtu),
+            sulfur_content=mean(sulfur_content_pct),
+    ash_content=mean(ash_content_pct))
+```
+
+
+#Use multiple-linear regression to determine the best set of variables to predict fuel_cost_per_mmbtu
+
+#training data
+```{r}
+reg_df<- f_cluster
+fuel<-reg_df[,-c(1)]
+fuel_ML<- preProcess(fuel, method = "range")
+fuel_predict <- predict(fuel_ML, fuel)
+head(fuel_predict)
+```
+#performing multiple linear regression model on training data
+```{r}
+k<-fuel_predict$fuel_cost_per_mmbtu
+D1<- fuel_predict$fuel_mmbtu_per_unit 
+D2<- fuel_predict$sulfur_content_pct
+D3<- fuel_predict$ash_content_pct
+model_check <- lm(fuel_cost_per_mmbtu~.,data=fuel_predict)
+summary(model_check)
+
+```
+#Use the anova analysis
+```{r}
+anova(model_check)
+```
+
+#Test data
+```{r}
+Check_df<- test_data
+fuel<-Check_df[,-c(1)]
+fuel_chk<- preProcess(fuel, method = "range")
+fuel_check <- predict(fuel_chk, fuel)
+head(fuel_check)
+```
+
+#performing multiple linear regression model on test data
+```{r}
+M<-fuel_check$fuel_cost_per_mmbtu
+
+T1<- fuel_predict$fuel_mmbtu_per_unit 
+T2<- fuel_predict$sulfur_content_pct
+T3<- fuel_predict$ash_content_pct
+model_check1 <- lm(fuel_cost_per_mmbtu~.,data=fuel_check)
+summary(model_check1)
+```
+#Use the anova analysis to predict the model
+```{r}
+anova(model_check1)
+```
+# Conclusion
+
+#It appears that the predictors in your model have varying levels of significance. The intercept and fuel_mmbtu_per_unit have statistically significant coefficients, while sulfur_content_pct and ash_content_pct do not appear to have a statistically significant effect on fuel_cost_per_mmbtu. Additionally, the fcluster2 variable also has a statistically significant effect on fuel_cost_per_mmbtu. In the test data, only the fuel_mmbtu_per_unit predictor appears to be statistically significant, while sulfur_content_pct and ash_content_pct do not appear to have a significant effect on fuel_cost_per_mmbtu. Overall, it seems that fuel_mmbtu_per_unit is the most important predictor in your model for predicting fuel_cost_per_mmbtu, with the other predictors having limited impact.
