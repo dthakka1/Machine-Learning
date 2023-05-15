@@ -1,0 +1,66 @@
+---
+title: "Assignment"
+output: word_document
+date: "2023-01-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Assignment 1 - Introduction to R
+# Source of dataset - Kaggle.com 
+# https://www.kaggle.com/datasets/ritesh2000/trending-tv-shows-on-netflix
+# Title of the dataset: Trending TV shows on Netflix
+#Data Content:
+#Title: Name of the TV show
+#Year: Year in which the show was released
+#Rating: Ratings given by Netflix
+#IMDB_Ratings: Ratings by IMDB
+#Netflix: If the show is currently streaming on Netflix or not
+```{r}
+library(readxl)
+Netflix_data <- read_excel("Netflix_data.xls")
+View(Netflix_data)
+```
+#Question 1:
+#Print out descriptive statistics for quantitative and qualitative variables
+```{r}
+summary(Netflix_data)
+table(Netflix_data$Year)
+table(Netflix_data$Titles)
+library(psych)
+describe(Netflix_data$Year)
+```
+#Question2:
+#Transforming categorical variable into numeric variable
+```{r}
+Netflix_data$Titles=as.numeric(Netflix_data$Titles)
+as.numeric(Netflix_data$Titles)
+```
+#Categorical variable was converted to N/A as the data was non-numeric.
+#Tranforming numeric variable into categorical varaible
+```{r}
+attach(Netflix_data)
+names(Netflix_data)
+Year[1:10]
+CatYear <- cut(Year, breaks = c(1990,1995,2000,2005,2010,2015,2020), labels = c("A", "B","C","D","E","F"))
+CatYear[1:5]
+```
+#Tranforming categorical variable into factor (numeric) variable
+```{r}
+Titles=c("Breaking Bad","Game of Thrones","Breaking Bad","Game of Thrones","Rick and Morty","Dark","Stranger Things","Avatar: The Last Airbender","Sherlock","Chernobyl","Friends","The Office","Better Call Saul","The Wire","Supernatural","Fargo","Black Mirror","Band of Brothers","Attack on Titan","House","Money Heist","Peaky Blinders","Mr. Robot","Vikings","The Sopranos","The Simpsons","The Mandalorian","Lost","Westworld","The Umbrella Academy","Narcos","True Detective","Marvel's Daredevil","Brooklyn Nine-Nine","The Walking Dead","Parks and Recreation","Mindhunter","South Park","Suits","Hannibal","Dexter","Community","Fringe","Modern Family","The Big Bang Theory","Firefly","Mad Men","Fullmetal Alchemist: Brotherhood","Ozark","The Witcher","Lucifer","It's Always Sunny in Philadelphia")
+Titles_factor<-factor(Titles)
+Titles_factor
+```
+#Question 3:
+#Plot at least one quantitative variable, and one scatter plot
+#Histogram
+```{r}
+variable=Netflix_data$Year
+hist(Netflix_data$Year, main = "Year of the Show", col = ("blue"))
+```
+#Scatter Plot
+```{r}
+plot(Netflix_data$Year,Netflix_data$IMDB_Rating, main = "Ratings per year", col="green")
+abline(lm(IMDB_Rating~Year), col=("red"))
+```
